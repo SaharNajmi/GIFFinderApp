@@ -1,6 +1,6 @@
 package com.example.giffinderapp.model
 
-data class Gif(
+data class GiphyRandom(
     val `data`: Data,
     val meta: Meta
 ) {

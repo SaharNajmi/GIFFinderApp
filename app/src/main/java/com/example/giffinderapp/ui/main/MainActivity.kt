@@ -21,10 +21,7 @@ import androidx.compose.material.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.MutableState
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -48,19 +45,29 @@ import kotlinx.coroutines.Runnable
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
 
-    lateinit var stateVisibilityLayout: MutableState<Boolean>
-    lateinit var gifUrl: MutableState<String>
-    val viewModel: MainViewModel by viewModels()
+    private lateinit var stateVisibilityLayout: MutableState<Boolean>
+    private lateinit var gifRandom: MutableState<String>
+    private lateinit var gifSearch: MutableList<String>
+    private val viewModel: MainViewModel by viewModels()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
             GIFFinderAppTheme {
                 stateVisibilityLayout = remember { mutableStateOf(true) }
-                gifUrl = remember { mutableStateOf("") }
+                gifRandom = remember { mutableStateOf("") }
+                gifSearch = remember { mutableStateListOf() }
 
                 viewModel.randGifUrl.observe(this) {
-                    gifUrl.value = it.split("?cid").first()
+                    gifRandom.value = it.split("?cid").first()
+                }
+
+                //result search gif
+                viewModel.gifs.observe(this) {
+                    gifSearch.clear()
+                    it.forEach { element ->
+                        gifSearch.add(element.images.preview_gif.url.split("?cid").first())
+                    }
                 }
 
                 Surface(
@@ -87,7 +94,7 @@ class MainActivity : ComponentActivity() {
             SearchView()
         }
         ShowMessageText("Result")
-        GifList(gifList = listOf("", "", "", "", "", ""))
+        GifList(gifList = gifSearch)
     }
 
     @Composable
@@ -109,13 +116,13 @@ class MainActivity : ComponentActivity() {
     private fun reloadGifDelay() = Handler(Looper.getMainLooper()).postDelayed(runnable(), 10000)
 
     @Composable
-    private fun GifList(gifList: List<String>) {
+    private fun GifList(gifList: MutableList<String>) {
         LazyVerticalGrid(
             columns = GridCells.Fixed(3),
             contentPadding = PaddingValues(10.dp),
         ) {
             items(gifList.size) { index ->
-                GifItem()
+                GifItem(gifList[index])
             }
         }
     }
@@ -189,6 +196,7 @@ class MainActivity : ComponentActivity() {
             value = textState.value,
             onValueChange = { value ->
                 textState.value = value
+                viewModel.searchGif(value.text)
             },
             modifier = Modifier
                 .fillMaxWidth(),
@@ -209,6 +217,8 @@ class MainActivity : ComponentActivity() {
                         onClick = {
                             textState.value =
                                 TextFieldValue("") // Remove text from TextField
+                            //clear search history
+                            gifSearch.clear()
                         }
                     ) {
                         Icon(
@@ -255,7 +265,7 @@ class MainActivity : ComponentActivity() {
             Image(
                 painter = rememberImagePainter(
                     imageLoader = imageLoader,
-                    data = gifUrl.value,
+                    data = gifRandom.value,
                     builder = {
                         error(R.drawable.ic_gif)
                     }
@@ -271,7 +281,7 @@ class MainActivity : ComponentActivity() {
     }
 
     @Composable
-    fun GifItem() {
+    fun GifItem(url: String) {
         Card(
             modifier = Modifier.padding(end = 5.dp, start = 5.dp, bottom = 8.dp),
             shape = RoundedCornerShape(10.dp),
@@ -279,7 +289,12 @@ class MainActivity : ComponentActivity() {
         )
         {
             Image(
-                painter = painterResource(id = R.drawable.ic_launcher_background),
+                painter = rememberImagePainter(
+                    data = url,
+                    builder = {
+                        error(R.drawable.ic_gif)
+                    }
+                ),
                 contentDescription = null,
                 contentScale = ContentScale.FillBounds,
                 modifier = Modifier
