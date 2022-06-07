@@ -1,9 +1,13 @@
-package com.example.giffinderapp
+package com.example.giffinderapp.ui.main
 
+import android.os.Build.VERSION.SDK_INT
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.viewModels
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -32,15 +36,33 @@ import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil.ImageLoader
+import coil.compose.rememberImagePainter
+import coil.decode.GifDecoder
+import coil.decode.ImageDecoderDecoder
+import com.example.giffinderapp.R
 import com.example.giffinderapp.ui.theme.GIFFinderAppTheme
+import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.Runnable
 
+@AndroidEntryPoint
 class MainActivity : ComponentActivity() {
+
     lateinit var stateVisibilityLayout: MutableState<Boolean>
+    lateinit var gifUrl: MutableState<String>
+    val viewModel: MainViewModel by viewModels()
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
             GIFFinderAppTheme {
                 stateVisibilityLayout = remember { mutableStateOf(true) }
+                gifUrl = remember { mutableStateOf("") }
+
+                viewModel.randGifUrl.observe(this) {
+                    gifUrl.value = it.split("?cid").first()
+                }
+
                 Surface(
                     modifier = Modifier
                         .fillMaxSize(),
@@ -73,8 +95,18 @@ class MainActivity : ComponentActivity() {
         SearchBar()
         ShowMessageText("Random gif")
         CardGif()
+        reloadGifDelay()
     }
 
+    private fun runnable(): Runnable {
+        return Runnable {
+            //new request after 10s
+            viewModel.getRandomGif()
+            reloadGifDelay()
+        }
+    }
+
+    private fun reloadGifDelay() = Handler(Looper.getMainLooper()).postDelayed(runnable(), 10000)
 
     @Composable
     private fun GifList(gifList: List<String>) {
@@ -207,12 +239,28 @@ class MainActivity : ComponentActivity() {
     fun CardGif() {
         Card(
             modifier = Modifier,
-            shape = RoundedCornerShape(15.dp),
-            elevation = 2.dp
+            shape = RoundedCornerShape(15.dp)
         )
         {
+            val imageLoader = ImageLoader.Builder(applicationContext)
+                .components {
+                    if (SDK_INT >= 28) {
+                        add(ImageDecoderDecoder.Factory())
+                    } else {
+                        add(GifDecoder.Factory())
+                    }
+                }
+                .build()
+
             Image(
-                painter = painterResource(id = R.drawable.ic_gif),
+                painter = rememberImagePainter(
+                    imageLoader = imageLoader,
+                    data = gifUrl.value,
+                    builder = {
+                        error(R.drawable.ic_gif)
+                    }
+                ),
+                contentScale = ContentScale.Crop,
                 contentDescription = null,
                 modifier = Modifier
                     .fillMaxWidth()
